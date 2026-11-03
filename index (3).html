@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Шахта</title>
+<style>
+:root{--bg:#f3efe8;--card:#fff;--tx:#241c12;--mu:#7a6c58;--ac:#e08a1e;--ok:#2e9e4f;--bad:#d64545;--bd:#e2d9c8;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17130e;--card:#252017;--tx:#f3e9d6;--mu:#a99a80;--bd:#3a3225;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#17130e;--card:#252017;--tx:#f3e9d6;--mu:#a99a80;--bd:#3a3225;color-scheme:dark}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--tx);font:16px/1.35 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;flex-direction:column;overflow:hidden;user-select:none;touch-action:manipulation}
+header{padding:10px 14px;background:var(--card);border-bottom:1px solid var(--bd)}
+#money{font-size:24px;font-weight:800;color:var(--ac)}
+#buffs{font-size:12px;color:var(--mu);min-height:16px}
+main{flex:1;overflow-y:auto;padding:12px;max-width:600px;width:100%;margin:0 auto}
+nav{display:flex;background:var(--card);border-top:1px solid var(--bd)}
+nav button{flex:1;border:0;background:none;color:var(--mu);padding:8px 0;font-size:11px}
+nav button span{display:block;font-size:20px}
+nav button.on{color:var(--ac);font-weight:700}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px;margin-bottom:10px}
+.row{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.row small,.mu{color:var(--mu);font-size:13px}
+button.b{background:var(--ac);color:#fff;border:0;border-radius:10px;padding:9px 14px;font-weight:700;font-size:14px}
+button.b:disabled{opacity:.4}
+button.g{background:var(--ok)}
+h3{margin:4px 0 8px;font-size:15px}
+#rockw{position:relative;text-align:center;padding:10px 0}
+#rock{width:200px;height:200px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#a29686,#5c5347);display:inline-flex;align-items:center;justify-content:center;font-size:90px;box-shadow:0 8px 0 #3d362d;touch-action:manipulation}
+#rock.hit{animation:hit .12s}
+@keyframes hit{50%{transform:scale(.93) rotate(-3deg)}}
+.fx{position:absolute;pointer-events:none;font-weight:800;font-size:20px;color:var(--ac);animation:fl .8s forwards;text-shadow:0 1px 2px #0006}
+@keyframes fl{to{transform:translateY(-70px);opacity:0}}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.chip{border:2px solid var(--bd);border-radius:10px;padding:6px 9px;background:var(--bg);color:var(--tx);font-size:13px}
+.chip.on{border-color:var(--ac);background:var(--ac);color:#fff}
+#strip{position:relative;height:34px;border-radius:8px;overflow:hidden;margin:10px 0;background:var(--bad)}
+#zone{position:absolute;left:0;top:0;bottom:0;background:var(--ok)}
+#ptr{position:absolute;top:0;bottom:0;width:4px;background:#fff;box-shadow:0 0 6px #000;left:0}
+#res{text-align:center;font-weight:700;min-height:22px}
+</style></head><body>
+<header><div id="money"></div><div id="buffs"></div></header>
+<main id="main"></main>
+<nav id="nav"></nav>
+<script>
+const ORES=[["Уголь","⚫",2],["Медь","🟤",5],["Железо","⚙️",12],["Серебро","🥈",30],["Золото","🥇",80],["Рубин","🔴",200],["Алмаз","💎",500],["Мифрил","🟢",1500]];
+const PK=[["Деревянная",0],["Каменная",150],["Железная",1000],["Стальная",6000],["Золотая",35000],["Алмазная",200000],["Мифриловая",1500000]];
+const MN=[["Шахтёр","👷",100,.5],["Бурильщик","🚜",1200,3],["Экскаватор","🏗️",15000,20]];
+const BF=[["x2","Двойная добыча","⚡","×2 ресурсов за клик и авто, 60 сек",400],["sp","Энергетик","🥤","Шахтёры работают ×2, 60 сек",600],["lk","Удача","🍀","Чаще редкие руды, 60 сек",800]];
+const MUL={20:6,50:2.4,70:1.5};
+const def=()=>({money:0,inv:Array(8).fill(0),power:1,miners:[0,0,0],pick:0,sell:0,b:{x2:0,sp:0,lk:0}});
+let S=def();
+try{const o=JSON.parse(localStorage.getItem('mine_v1'));if(o&&o.inv)S=Object.assign(def(),o)}catch(e){}
+const save=()=>{try{localStorage.setItem('mine_v1',JSON.stringify(S))}catch(e){}};
+const $=s=>document.querySelector(s);
+const U={o:0,n:1,p:50,spin:false,msg:""};
+let tab=0,acc=0;
+const fmt=n=>{n=Math.floor(n);if(n<1000)return n;const u=["","К","М","Б","Т"];let i=0,v=n;while(v>=1000&&i<4){v/=1000;i++}return (v<10?v.toFixed(2):v<100?v.toFixed(1):Math.floor(v))+u[i]};
+const on=k=>S.b[k]>Date.now();
+const mult=()=>1+.5*S.pick;
+const tapN=()=>Math.round(S.power*mult())*(on('x2')?2:1);
+const rate=()=>S.miners.reduce((a,c,i)=>a+c*MN[i][3],0)*mult()*(on('x2')?2:1)*(on('sp')?2:1);
+const price=i=>Math.floor(ORES[i][2]*(1+.1*S.sell));
+const powerCost=()=>Math.floor(30*Math.pow(1.45,S.power-1));
+const minerCost=i=>Math.floor(MN[i][2]*Math.pow(1.15,S.miners[i]));
+const sellCost=()=>Math.floor(500*Math.pow(2.2,S.sell));
+const bfCost=i=>BF[i][4]*(1+S.pick*S.pick);
+function drop(){const mx=Math.min(7,S.pick+1),r=on('lk')?.45:.6;let w=[],t=0;for(let i=0;i<=mx;i++){const x=Math.pow(r,mx-i);w.push(x);t+=x}let q=Math.random()*t;for(let i=0;i<=mx;i++){q-=w[i];if(q<=0)return i}return mx}
+function mine(n){n=Math.floor(n);if(n<1)return 0;const k=Math.min(n,30),q=Math.floor(n/k),r=n-q*k;let last=0;for(let i=0;i<k;i++){last=drop();S.inv[last]+=q+(i<r?1:0)}return last}
+function pay(c){if(S.money<c)return false;S.money-=c;return true}
+function buy(t,i){
+ if(t=='power'){if(pay(powerCost()))S.power++}
+ else if(t=='miner'){if(pay(minerCost(i)))S.miners[i]++}
+ else if(t=='pick'){if(i==S.pick+1&&pay(PK[i][1]))S.pick=i}
+ else if(t=='sell'){if(S.sell<10&&pay(sellCost()))S.sell++}
+ else if(t=='buff'){if(pay(bfCost(i))){const k=BF[i][0];S.b[k]=Math.max(Date.now(),S.b[k])+60000}}
+ else if(t=='dyn'){if(pay(300*(1+S.pick*S.pick)))mine(tapN()*50)}
+ save();render()}
+function sellOre(i){S.money+=S.inv[i]*price(i);S.inv[i]=0;save();render()}
+function sellAll(){for(let i=0;i<8;i++){S.money+=S.inv[i]*price(i);S.inv[i]=0}save();render()}
+const total=()=>S.inv.reduce((a,c,i)=>a+c*price(i),0);
+function pickAvail(n){return n}
+const TABS=[["⛏️","Шахта"],["🎒","Рюкзак"],["🛠️","Прокачка"],["🎰","Апгрейдер"],["🛒","Магазин"]];
+function render(){
+ $('#nav').innerHTML=TABS.map((t,i)=>`<button class="${i==tab?'on':''}" onclick="tab=${i};render()"><span>${t[0]}</span>${t[1]}</button>`).join('');
+ let h='';
+ if(tab==0){
+  h=`<div class="card"><div id="rockw"><div id="rock">⛏️</div></div>
+  <div class="row"><small>За клик</small><b>${fmt(tapN())}</b></div>
+  <div class="row"><small>Авто-добыча</small><b>${rate().toFixed(1)}/с</b></div>
+  <div class="row"><small>Кирка</small><b>${PK[S.pick][0]}</b></div>
+  <div class="row"><small>Доступные руды</small><b>${ORES.slice(0,Math.min(7,S.pick+1)+1).map(o=>o[1]).join(' ')}</b></div></div>
+  <p class="mu" style="text-align:center">Тапай по камню! Руду продавай во вкладке «Рюкзак».</p>
+  <p style="text-align:center"><button class="b" style="background:var(--bad)" onclick="if(confirm('Сбросить весь прогресс?')){S=def();save();render()}">Сброс игры</button></p>`;
+ }else if(tab==1){
+  h=`<div class="card row"><div><b>Всего: <span data-total></span> 💰</b><br><small>Цена +${S.sell*10}% от торговца</small></div><button class="b g" onclick="sellAll()">Продать всё</button></div>`+
+  ORES.map((o,i)=>`<div class="card row"><div style="font-size:28px">${o[1]}</div><div style="flex:1"><b>${o[0]}</b><br><small>${price(i)} 💰 за шт.</small></div><b data-inv="${i}"></b><button class="b" onclick="sellOre(${i})">Продать</button></div>`).join('');
+ }else if(tab==2){
+  h=`<div class="card"><h3>💪 Сила удара (ур. ${S.power})</h3><div class="row"><small>+1 руда за клик</small><button class="b" ${S.money<powerCost()?'disabled':''} onclick="buy('power')">${fmt(powerCost())} 💰</button></div></div>
+  <div class="card"><h3>👥 Шахтёры</h3>`+MN.map((m,i)=>`<div class="row" style="margin-bottom:8px"><div>${m[1]} <b>${m[0]}</b> ×${S.miners[i]}<br><small>${m[3]} руды/с каждый</small></div><button class="b" ${S.money<minerCost(i)?'disabled':''} onclick="buy('miner',${i})">${fmt(minerCost(i))} 💰</button></div>`).join('')+`</div>
+  <div class="card"><h3>⛏️ Кирки</h3>`+PK.map((p,i)=>{if(i==0)return'';const own=S.pick>=i,nx=i==S.pick+1;return `<div class="row" style="margin-bottom:8px"><div><b>${p[0]}</b><br><small>×${1+.5*i} добыча, руда до ${ORES[Math.min(7,i+1)][1]}</small></div>${own?'<b style="color:var(--ok)">✔</b>':`<button class="b" ${(!nx||S.money<p[1])?'disabled':''} onclick="buy('pick',${i})">${fmt(p[1])} 💰</button>`}</div>`}).join('')+`</div>`;
+ }else if(tab==3){
+  const o=U.o,hi=S.inv[o];U.n=Math.max(1,Math.min(U.n,Math.max(hi,1)));
+  const out=Math.floor(U.n*ORES[o][2]*MUL[U.p]/ORES[o+1][2]);
+  h=`<div class="card"><h3>Что закинуть</h3><div class="chips">${ORES.slice(0,7).map((r,i)=>`<button class="chip ${i==o?'on':''}" onclick="U.o=${i};U.n=1;render()">${r[1]} ${fmt(S.inv[i])}</button>`).join('')}</div>
+  <div class="row"><small>Количество: <b>${fmt(U.n)}</b></small><span>${[1,10,100].map(n=>`<button class="chip" onclick="U.n=${n};render()">${n}</button>`).join(' ')}<button class="chip" onclick="U.n=Math.max(1,S.inv[U.o]);render()">Всё</button></span></div></div>
+  <div class="card"><h3>Шанс</h3><div class="chips">${[20,50,70].map(p=>`<button class="chip ${p==U.p?'on':''}" onclick="U.p=${p};render()">${p}%</button>`).join('')}</div>
+  <div class="mu">При успехе: <b>${fmt(out)} × ${ORES[o+1][1]} ${ORES[o+1][0]}</b>${out<1?' (мало руды, добавь ещё)':''}</div>
+  <div id="strip"><div id="zone" style="width:${U.p}%"></div><div id="ptr"></div></div>
+  <div id="res">${U.msg}</div>
+  <button class="b" style="width:100%;margin-top:8px" ${(U.spin||hi<U.n||out<1)?'disabled':''} onclick="spin()">🎰 Крутить</button></div>
+  <p class="mu">Чем ниже шанс, тем больше награда. При проигрыше руда сгорает.</p>`;
+ }else{
+  h=`<div class="card"><h3>🤝 Торговец (ур. ${S.sell}/10)</h3><div class="row"><small>+10% к цене продажи</small><button class="b" ${(S.sell>=10||S.money<sellCost())?'disabled':''} onclick="buy('sell')">${S.sell>=10?'МАКС':fmt(sellCost())+' 💰'}</button></div></div>
+  <div class="card"><h3>Баффы</h3>`+BF.map((b,i)=>`<div class="row" style="margin-bottom:8px"><div>${b[2]} <b>${b[1]}</b><br><small>${b[3]}</small><br><small data-buff="${b[0]}"></small></div><button class="b" ${S.money<bfCost(i)?'disabled':''} onclick="buy('buff',${i})">${fmt(bfCost(i))} 💰</button></div>`).join('')+
+  `<div class="row"><div>🧨 <b>Динамит</b><br><small>Мгновенно 50 ударов</small></div><button class="b" ${S.money<300*(1+S.pick*S.pick)?'disabled':''} onclick="buy('dyn')">${fmt(300*(1+S.pick*S.pick))} 💰</button></div></div>`;
+ }
+ $('#main').innerHTML=h;upd()}
+function spin(){
+ if(U.spin)return;const o=U.o,n=U.n;if(S.inv[o]<n)return;
+ const out=Math.floor(n*ORES[o][2]*MUL[U.p]/ORES[o+1][2]);if(out<1)return;
+ S.inv[o]-=n;U.spin=true;save();
+ const win=Math.random()*100<U.p,tgt=win?Math.random()*U.p*.9+U.p*.05:U.p+Math.random()*(100-U.p)*.9+(100-U.p)*.05;
+ const p=$('#ptr'),st=$('#strip');p.style.transition='none';p.style.left='0';void p.offsetWidth;
+ p.style.transition='left 2.4s cubic-bezier(.15,.7,.2,1)';p.style.left=`calc(${tgt}% - 2px)`;
+ document.querySelectorAll('.card button.b,.chip').forEach(b=>b.disabled=true);
+ setTimeout(()=>{U.spin=false;
+  if(win){S.inv[o+1]+=out;U.msg=`✅ Успех! +${fmt(out)} ${ORES[o+1][1]}`}else U.msg=`❌ Не повезло, руда потеряна`;
+  save();render()},2600)}
+function upd(){
+ $('#money').textContent='💰 '+fmt(S.money);
+ const now=Date.now(),bs=BF.filter(b=>on(b[0])).map(b=>`${b[2]} ${Math.ceil((S.b[b[0]]-now)/1000)}с`);
+ $('#buffs').textContent=bs.join('  ')||'Нет активных баффов';
+ document.querySelectorAll('[data-inv]').forEach(e=>e.textContent=fmt(S.inv[e.dataset.inv]));
+ document.querySelectorAll('[data-total]').forEach(e=>e.textContent=fmt(total()));
+ document.querySelectorAll('[data-buff]').forEach(e=>{const k=e.dataset.buff;e.textContent=on(k)?'Осталось '+Math.ceil((S.b[k]-now)/1000)+' с':''})}
+$('#main').addEventListener('pointerdown',e=>{
+ const r=e.target.closest('#rock');if(!r)return;
+ const n=tapN(),i=mine(n);
+ r.classList.remove('hit');void r.offsetWidth;r.classList.add('hit');
+ const w=$('#rockw'),b=w.getBoundingClientRect(),f=document.createElement('div');
+ f.className='fx';f.textContent='+'+fmt(n)+' '+ORES[i][1];
+ f.style.left=Math.max(10,Math.min(b.width-90,e.clientX-b.left-20))+'px';f.style.top=Math.max(0,e.clientY-b.top-20)+'px';
+ w.appendChild(f);setTimeout(()=>f.remove(),800)});
+let last=performance.now(),sv=0;
+setInterval(()=>{const t=performance.now(),dt=Math.min((t-last)/1000,2);last=t;
+ acc+=rate()*dt;if(acc>=1){mine(acc);acc-=Math.floor(acc)}
+ upd();sv+=dt;if(sv>5){sv=0;save()}},100);
+document.addEventListener('visibilitychange',save);
+render();
+</script></body></html>
